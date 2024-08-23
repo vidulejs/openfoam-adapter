@@ -1,4 +1,4 @@
-name: Build with OpenFOAM v2404
+name: Build with OpenFOAM v2406
 on:
   push:
     branches-ignore:
