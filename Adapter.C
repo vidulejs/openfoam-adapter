@@ -437,6 +437,7 @@ void preciceAdapter::Adapter::execute()
     // Read checkpoint if required
     if (requiresReadingCheckpoint())
     {
+        pruneCheckpointedFields();
         readCheckpoint();
     }
 
@@ -924,17 +925,26 @@ void preciceAdapter::Adapter::setupCheckpointing()
     ACCUMULATE_TIMER(timeInCheckpointingSetup_);
 }
 
-void preciceAdapter::Adapter::printFieldCounts()
+void preciceAdapter::Adapter::printFieldCountsDB()
 {
+
+// Print fields in the OpenFOAM database
+// don't print the fields ending with '0' aka oldTime
+
 std::string fields;
 int count = 0;
+int strlen = 0;
 
 #undef doLocalCode
 #define doLocalCode(GeomField)                                           \
     for (const word& obj : mesh_.sortedNames<GeomField>())               \
     {                                                                    \
-        fields += obj + " ";                                             \
-        count++;                                                         \
+        strlen = obj.size();                                             \
+        if (obj[strlen - 1] != '0')                                      \
+        {                                                                \
+            fields += obj + " ";                                         \
+            count++;                                                     \
+        }                                                                \
     }                                                                    \
     DEBUG(adapterInfo(std::to_string(count) + " : " #GeomField + " : " + fields));
     fields = "";
@@ -953,11 +963,54 @@ int count = 0;
     doLocalCode(pointVectorField);
     doLocalCode(pointTensorField);
 
-    // NOTE: Add here other object types to checkpoint, if needed.
-
 #undef doLocalCode
 }
 
+void preciceAdapter::Adapter::pruneCheckpointedFields()
+{
+    // Check if checkpointed fields exist in OpenFOAM database
+    // If not, remove them from the checkpointed fields list
+
+    word obj;
+    std::vector<word> fieldNames;
+    std::vector<std::string> toRemove;
+#undef doLocalCode
+#define doLocalCode(GeomField, GeomFieldMap, GeomFieldCopiesMap)           \
+    fieldNames.clear();                                                    \
+    toRemove.clear();                                                      \
+    for (const word& obj : mesh_.sortedNames<GeomField>())                 \
+    {                                                                      \
+        fieldNames.push_back(obj);                                         \
+    }                                                                      \
+    for (const auto& kv : GeomFieldMap){                                   \
+        obj = kv.first;                                                    \
+        if (std::find(fieldNames.begin(), fieldNames.end(), obj) == fieldNames.end())  \
+        {                                                                  \
+            toRemove.push_back(static_cast<std::string>(obj));             \
+        }                                                                  \
+    }                                                                      \
+    for (const auto& obj : toRemove) {                                     \
+        GeomFieldMap.erase(obj);                                           \
+        delete GeomFieldCopiesMap[obj];                                    \
+        GeomFieldCopiesMap.erase(obj);                                     \
+        DEBUG(adapterInfo("Removed " #GeomField " : " + obj + " from the checkpointed fields list.")); \
+    }
+
+doLocalCode(volScalarField, volScalarFields_, volScalarFieldCopies_);
+doLocalCode(volVectorField, volVectorFields_, volVectorFieldCopies_);
+doLocalCode(volTensorField, volTensorFields_, volTensorFieldCopies_);
+doLocalCode(volSymmTensorField, volSymmTensorFields_, volSymmTensorFieldCopies_);
+
+doLocalCode(surfaceScalarField, surfaceScalarFields_, surfaceScalarFieldCopies_);
+doLocalCode(surfaceVectorField, surfaceVectorFields_, surfaceVectorFieldCopies_);
+doLocalCode(surfaceTensorField, surfaceTensorFields_, surfaceTensorFieldCopies_);
+
+doLocalCode(pointScalarField, pointScalarFields_, pointScalarFieldCopies_);
+doLocalCode(pointVectorField, pointVectorFields_, pointVectorFieldCopies_);
+doLocalCode(pointTensorField, pointTensorFields_, pointTensorFieldCopies_);
+
+#undef doLocalCode
+}
 
 // All mesh checkpointed fields
 
@@ -1102,7 +1155,7 @@ void preciceAdapter::Adapter::readCheckpoint()
     //  for efficiency.
     DEBUG(adapterInfo("Reading a checkpoint..."));
 
-    printFieldCounts();
+    printFieldCountsDB();
 
     // Reload the runTime
     reloadCheckpointTime();
@@ -1328,7 +1381,7 @@ void preciceAdapter::Adapter::writeCheckpoint()
 
     DEBUG(adapterInfo("Writing a checkpoint..."));
 
-    printFieldCounts();
+    printFieldCountsDB();
 
     // Store the runTime
     storeCheckpointTime();

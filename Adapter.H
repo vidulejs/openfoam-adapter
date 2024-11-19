@@ -1,8 +1,10 @@
 #ifndef PRECICEADAPTER_H
 #define PRECICEADAPTER_H
 
-#include "Interface.H"
 #include <unordered_map>
+#include <algorithm>
+
+#include "Interface.H"
 
 // Conjugate Heat Transfer module
 #include "CHT/CHT.H"
@@ -293,7 +295,14 @@ private:
 
     //- Configure the checkpointing
     void setupCheckpointing();
-    void printFieldCounts();
+    
+    // Debug
+    void printFieldCountsDB();
+
+    // Cross check the checkpointed fields with the
+    // OpenFOAM database and remove the fields that are not in the database.
+    void pruneCheckpointedFields();
+
 
     //- Make a copy of the runTime object
     void storeCheckpointTime();
