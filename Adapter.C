@@ -896,12 +896,12 @@ void preciceAdapter::Adapter::setupCheckpointing()
     DEBUG(adapterInfo("Adding in checkpointed fields..."));
 
 #undef doLocalCode
-#define doLocalCode(GeomField)                                           \
-    /* Checkpoint registered GeomField objects */                        \
-    for (const word& obj : mesh_.sortedNames<GeomField>())               \
-    {                                                                    \
-        std::string objStr = obj;                                        \
-        DEBUG(adapterInfo("Checkpoint " + objStr + " : " #GeomField));      \
+#define doLocalCode(GeomField)                                                   \
+    /* Checkpoint registered GeomField objects */                                \
+    for (const word& obj : mesh_.sortedNames<GeomField>())                       \
+    {                                                                            \
+        std::string objStr = obj;                                                \
+        DEBUG(adapterInfo("Checkpoint " + objStr + " : " #GeomField));           \
         addCheckpointField(objStr, mesh_.thisDb().getObjectPtr<GeomField>(obj)); \
     }
 
@@ -934,39 +934,41 @@ void preciceAdapter::Adapter::pruneCheckpointedFields()
     std::vector<word> fieldNames;
     std::vector<std::string> toRemove;
 #undef doLocalCode
-#define doLocalCode(GeomField, GeomFieldMap, GeomFieldCopiesMap)           \
-    fieldNames.clear();                                                    \
-    toRemove.clear();                                                      \
-    for (const word& obj : mesh_.sortedNames<GeomField>())                 \
-    {                                                                      \
-        fieldNames.push_back(obj);                                         \
-    }                                                                      \
-    for (const auto& kv : GeomFieldMap){                                   \
-        obj = kv.first;                                                    \
-        if (std::find(fieldNames.begin(), fieldNames.end(), obj) == fieldNames.end())  \
-        {                                                                  \
-            toRemove.push_back(static_cast<std::string>(obj));             \
-        }                                                                  \
-    }                                                                      \
-    for (const auto& obj : toRemove) {                                     \
-        GeomFieldMap.erase(obj);                                           \
-        delete GeomFieldCopiesMap[obj];                                    \
-        GeomFieldCopiesMap.erase(obj);                                     \
+#define doLocalCode(GeomField, GeomFieldMap, GeomFieldCopiesMap)                                       \
+    fieldNames.clear();                                                                                \
+    toRemove.clear();                                                                                  \
+    for (const word& obj : mesh_.sortedNames<GeomField>())                                             \
+    {                                                                                                  \
+        fieldNames.push_back(obj);                                                                     \
+    }                                                                                                  \
+    for (const auto& kv : GeomFieldMap)                                                                \
+    {                                                                                                  \
+        obj = kv.first;                                                                                \
+        if (std::find(fieldNames.begin(), fieldNames.end(), obj) == fieldNames.end())                  \
+        {                                                                                              \
+            toRemove.push_back(static_cast<std::string>(obj));                                         \
+        }                                                                                              \
+    }                                                                                                  \
+    for (const auto& obj : toRemove)                                                                   \
+    {                                                                                                  \
+        GeomFieldMap.erase(obj);                                                                       \
+        delete GeomFieldCopiesMap[obj];                                                                \
+        GeomFieldCopiesMap.erase(obj);                                                                 \
         DEBUG(adapterInfo("Removed " #GeomField " : " + obj + " from the checkpointed fields list.")); \
     }
 
-doLocalCode(volScalarField, volScalarFields_, volScalarFieldCopies_);
-doLocalCode(volVectorField, volVectorFields_, volVectorFieldCopies_);
-doLocalCode(volTensorField, volTensorFields_, volTensorFieldCopies_);
-doLocalCode(volSymmTensorField, volSymmTensorFields_, volSymmTensorFieldCopies_);
+    doLocalCode(volScalarField, volScalarFields_, volScalarFieldCopies_);
+    doLocalCode(volVectorField, volVectorFields_, volVectorFieldCopies_);
+    doLocalCode(volTensorField, volTensorFields_, volTensorFieldCopies_);
+    doLocalCode(volSymmTensorField, volSymmTensorFields_, volSymmTensorFieldCopies_);
 
-doLocalCode(surfaceScalarField, surfaceScalarFields_, surfaceScalarFieldCopies_);
-doLocalCode(surfaceVectorField, surfaceVectorFields_, surfaceVectorFieldCopies_);
-doLocalCode(surfaceTensorField, surfaceTensorFields_, surfaceTensorFieldCopies_);
+    doLocalCode(surfaceScalarField, surfaceScalarFields_, surfaceScalarFieldCopies_);
+    doLocalCode(surfaceVectorField, surfaceVectorFields_, surfaceVectorFieldCopies_);
+    doLocalCode(surfaceTensorField, surfaceTensorFields_, surfaceTensorFieldCopies_);
 
-doLocalCode(pointScalarField, pointScalarFields_, pointScalarFieldCopies_);
-doLocalCode(pointVectorField, pointVectorFields_, pointVectorFieldCopies_);
-doLocalCode(pointTensorField, pointTensorFields_, pointTensorFieldCopies_);
+    doLocalCode(pointScalarField, pointScalarFields_, pointScalarFieldCopies_);
+    doLocalCode(pointVectorField, pointVectorFields_, pointVectorFieldCopies_);
+    doLocalCode(pointTensorField, pointTensorFields_, pointTensorFieldCopies_);
 
 #undef doLocalCode
 }
@@ -1363,7 +1365,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         volVectorField* fieldCopy = volVectorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : volTensorFields_)
@@ -1373,7 +1374,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         volTensorField* fieldCopy = volTensorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : volSymmTensorFields_)
@@ -1383,7 +1383,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         volSymmTensorField* fieldCopy = volSymmTensorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : surfaceScalarFields_)
@@ -1393,7 +1392,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         surfaceScalarField* fieldCopy = surfaceScalarFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : surfaceVectorFields_)
@@ -1403,7 +1401,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         surfaceVectorField* fieldCopy = surfaceVectorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : surfaceTensorFields_)
@@ -1413,7 +1410,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         surfaceTensorField* fieldCopy = surfaceTensorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : pointScalarFields_)
@@ -1423,7 +1419,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         pointScalarField* fieldCopy = pointScalarFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : pointVectorFields_)
@@ -1433,7 +1428,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         pointVectorField* fieldCopy = pointVectorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
 
     for (const auto& kv : pointTensorFields_)
@@ -1443,7 +1437,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
         pointTensorField* fieldCopy = pointTensorFieldCopies_.at(key);
         *fieldCopy = *field;
         DEBUG(adapterInfo("Checkpointed " + key));
-
     }
     // NOTE: Add here other types to write, if needed.
 
