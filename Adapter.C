@@ -925,47 +925,6 @@ void preciceAdapter::Adapter::setupCheckpointing()
     ACCUMULATE_TIMER(timeInCheckpointingSetup_);
 }
 
-void preciceAdapter::Adapter::printFieldCountsDB()
-{
-
-// Print fields in the OpenFOAM database
-// don't print the fields ending with '0' aka oldTime
-
-std::string fields;
-int count = 0;
-int strlen = 0;
-
-#undef doLocalCode
-#define doLocalCode(GeomField)                                           \
-    for (const word& obj : mesh_.sortedNames<GeomField>())               \
-    {                                                                    \
-        strlen = obj.size();                                             \
-        if (obj[strlen - 1] != '0')                                      \
-        {                                                                \
-            fields += obj + " ";                                         \
-            count++;                                                     \
-        }                                                                \
-    }                                                                    \
-    DEBUG(adapterInfo(std::to_string(count) + " : " #GeomField + " : " + fields));
-    fields = "";
-    count = 0;
-
-    doLocalCode(volScalarField);
-    doLocalCode(volVectorField);
-    doLocalCode(volTensorField);
-    doLocalCode(volSymmTensorField);
-
-    doLocalCode(surfaceScalarField);
-    doLocalCode(surfaceVectorField);
-    doLocalCode(surfaceTensorField);
-
-    doLocalCode(pointScalarField);
-    doLocalCode(pointVectorField);
-    doLocalCode(pointTensorField);
-
-#undef doLocalCode
-}
-
 void preciceAdapter::Adapter::pruneCheckpointedFields()
 {
     // Check if checkpointed fields exist in OpenFOAM database
@@ -1154,8 +1113,6 @@ void preciceAdapter::Adapter::readCheckpoint()
     //  Therefore, loading the oldTime() and oldTime().oldTime() fields for the other fields can be excluded
     //  for efficiency.
     DEBUG(adapterInfo("Reading a checkpoint..."));
-
-    printFieldCountsDB();
 
     // Reload the runTime
     reloadCheckpointTime();
@@ -1380,8 +1337,6 @@ void preciceAdapter::Adapter::writeCheckpoint()
     SETUP_TIMER();
 
     DEBUG(adapterInfo("Writing a checkpoint..."));
-
-    printFieldCountsDB();
 
     // Store the runTime
     storeCheckpointTime();

@@ -295,9 +295,6 @@ private:
 
     //- Configure the checkpointing
     void setupCheckpointing();
-    
-    // Debug
-    void printFieldCountsDB();
 
     // Cross check the checkpointed fields with the
     // OpenFOAM database and remove the fields that are not in the database.
