@@ -1,9 +1,6 @@
 #ifndef PRECICEADAPTER_H
 #define PRECICEADAPTER_H
 
-#include <unordered_map>
-#include <algorithm>
-
 #include "Interface.H"
 
 // Conjugate Heat Transfer module
@@ -180,67 +177,68 @@ private:
     //- Checkpointed volScalarField mesh fields (copies)
     std::vector<Foam::volScalarField::Internal*> volScalarInternalFieldCopies_;
 
-    // Maps of pointers to checkpointed fields and their copies
+    // Vectors of pointers to the checkpointed fields and their copies
 
     //- Checkpointed volScalarField fields
-    std::unordered_map<std::string, Foam::volScalarField*> volScalarFields_;
+    std::vector<Foam::volScalarField*> volScalarFields_;
 
     //- Checkpointed volScalarField fields (copies)
-    std::unordered_map<std::string, Foam::volScalarField*> volScalarFieldCopies_;
+    std::vector<Foam::volScalarField*> volScalarFieldCopies_;
 
     //- Checkpointed volVectorField fields
-    std::unordered_map<std::string, Foam::volVectorField*> volVectorFields_;
+    std::vector<Foam::volVectorField*> volVectorFields_;
 
     //- Checkpointed volVectorField fields (copies)
-    std::unordered_map<std::string, Foam::volVectorField*> volVectorFieldCopies_;
+    std::vector<Foam::volVectorField*> volVectorFieldCopies_;
 
     //- Checkpointed surfaceScalarField fields
-    std::unordered_map<std::string, Foam::surfaceScalarField*> surfaceScalarFields_;
+    std::vector<Foam::surfaceScalarField*> surfaceScalarFields_;
 
     //- Checkpointed surfaceScalarField fields (copies)
-    std::unordered_map<std::string, Foam::surfaceScalarField*> surfaceScalarFieldCopies_;
+    std::vector<Foam::surfaceScalarField*> surfaceScalarFieldCopies_;
 
     //- Checkpointed surfaceVectorField fields
-    std::unordered_map<std::string, Foam::surfaceVectorField*> surfaceVectorFields_;
+    std::vector<Foam::surfaceVectorField*> surfaceVectorFields_;
 
     //- Checkpointed surfaceVectorField fields (copies)
-    std::unordered_map<std::string, Foam::surfaceVectorField*> surfaceVectorFieldCopies_;
+    std::vector<Foam::surfaceVectorField*> surfaceVectorFieldCopies_;
 
     //- Checkpointed pointScalarField fields
-    std::unordered_map<std::string, Foam::pointScalarField*> pointScalarFields_;
+    std::vector<Foam::pointScalarField*> pointScalarFields_;
 
     //- Checkpointed pointScalarField fields (copies)
-    std::unordered_map<std::string, Foam::pointScalarField*> pointScalarFieldCopies_;
+    std::vector<Foam::pointScalarField*> pointScalarFieldCopies_;
 
     //- Checkpointed pointVectorField fields
-    std::unordered_map<std::string, Foam::pointVectorField*> pointVectorFields_;
+    std::vector<Foam::pointVectorField*> pointVectorFields_;
 
     //- Checkpointed pointVectorField fields (copies)
-    std::unordered_map<std::string, Foam::pointVectorField*> pointVectorFieldCopies_;
+    std::vector<Foam::pointVectorField*> pointVectorFieldCopies_;
 
     //- Checkpointed volTensorField fields
-    std::unordered_map<std::string, Foam::volTensorField*> volTensorFields_;
+    std::vector<Foam::volTensorField*> volTensorFields_;
 
     //- Checkpointed volTensorField fields (copies)
-    std::unordered_map<std::string, Foam::volTensorField*> volTensorFieldCopies_;
+    std::vector<Foam::volTensorField*> volTensorFieldCopies_;
 
     //- Checkpointed surfaceTensorField fields
-    std::unordered_map<std::string, Foam::surfaceTensorField*> surfaceTensorFields_;
+    std::vector<Foam::surfaceTensorField*> surfaceTensorFields_;
 
     //- Checkpointed surfaceTensorField fields (copies)
-    std::unordered_map<std::string, Foam::surfaceTensorField*> surfaceTensorFieldCopies_;
+    std::vector<Foam::surfaceTensorField*> surfaceTensorFieldCopies_;
 
     //- Checkpointed pointTensorField fields
-    std::unordered_map<std::string, Foam::pointTensorField*> pointTensorFields_;
+    std::vector<Foam::pointTensorField*> pointTensorFields_;
 
     //- Checkpointed pointTensorField fields (copies)
-    std::unordered_map<std::string, Foam::pointTensorField*> pointTensorFieldCopies_;
+    std::vector<Foam::pointTensorField*> pointTensorFieldCopies_;
 
     //- Checkpointed volSymmTensorField fields
-    std::unordered_map<std::string, Foam::volSymmTensorField*> volSymmTensorFields_;
+    std::vector<Foam::volSymmTensorField*> volSymmTensorFields_;
 
     //- Checkpointed volSymmTensorField fields (copies)
-    std::unordered_map<std::string, Foam::volSymmTensorField*> volSymmTensorFieldCopies_;
+    std::vector<Foam::volSymmTensorField*> volSymmTensorFieldCopies_;
+
 
     // NOTE: Declare additional vectors for any other types required.
 
@@ -296,8 +294,7 @@ private:
     //- Configure the checkpointing
     void setupCheckpointing();
 
-    // Cross check the checkpointed fields with the
-    // OpenFOAM database and remove the fields that are not in the database.
+    //- Remove checkpointed fields which are not used by OpenFOAM anymore
     void pruneCheckpointedFields();
 
 
@@ -331,37 +328,37 @@ private:
     // Add checkpoint fields, depending on the type
 
     //- Add a volScalarField to checkpoint
-    void addCheckpointField(const std::string& name, volScalarField* field);
+    void addCheckpointField(volScalarField* field);
 
     //- Add a volVectorField to checkpoint
-    void addCheckpointField(const std::string& name, volVectorField* field);
+    void addCheckpointField(volVectorField* field);
 
     //- Add a surfaceScalarField to checkpoint
-    void addCheckpointField(const std::string& name, surfaceScalarField* field);
+    void addCheckpointField(surfaceScalarField* field);
 
     //- Add a surfaceVectorField to checkpoint
-    void addCheckpointField(const std::string& name, surfaceVectorField* field);
+    void addCheckpointField(surfaceVectorField* field);
 
     //- Add a pointScalarField to checkpoint
-    void addCheckpointField(const std::string& name, pointScalarField* field);
+    void addCheckpointField(pointScalarField* field);
 
     //- Add a pointVectorField to checkpoint
-    void addCheckpointField(const std::string& name, pointVectorField* field);
+    void addCheckpointField(pointVectorField* field);
 
     // NOTE: Add here methods to add other object types to checkpoint,
     // if needed.
 
     //- Add a volTensorField to checkpoint
-    void addCheckpointField(const std::string& name, volTensorField* field);
+    void addCheckpointField(volTensorField* field);
 
     //- Add a surfaceTensorField to checkpoint
-    void addCheckpointField(const std::string& name, surfaceTensorField* field);
+    void addCheckpointField(surfaceTensorField* field);
 
     //- Add a pointTensorField to checkpoint
-    void addCheckpointField(const std::string& name, pointTensorField* field);
+    void addCheckpointField(pointTensorField* field);
 
     //- Add a volSymmTensorField to checkpoint
-    void addCheckpointField(const std::string& name, volSymmTensorField* field);
+    void addCheckpointField(volSymmTensorField* field);
 
     //- Read the checkpoint - restore the mesh fields and time
     void readMeshCheckpoint();

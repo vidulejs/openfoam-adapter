@@ -896,13 +896,12 @@ void preciceAdapter::Adapter::setupCheckpointing()
     DEBUG(adapterInfo("Adding in checkpointed fields..."));
 
 #undef doLocalCode
-#define doLocalCode(GeomField)                                                   \
-    /* Checkpoint registered GeomField objects */                                \
-    for (const word& obj : mesh_.sortedNames<GeomField>())                       \
-    {                                                                            \
-        std::string objStr = obj;                                                \
-        DEBUG(adapterInfo("Checkpoint " + objStr + " : " #GeomField));           \
-        addCheckpointField(objStr, mesh_.thisDb().getObjectPtr<GeomField>(obj)); \
+#define doLocalCode(GeomField)                                           \
+    /* Checkpoint registered GeomField objects */                        \
+    for (const word& obj : mesh_.sortedNames<GeomField>())               \
+    {                                                                    \
+        addCheckpointField(mesh_.thisDb().getObjectPtr<GeomField>(obj)); \
+        DEBUG(adapterInfo("Checkpoint " + obj + " : " #GeomField));      \
     }
 
     doLocalCode(volScalarField);
@@ -927,34 +926,50 @@ void preciceAdapter::Adapter::setupCheckpointing()
 
 void preciceAdapter::Adapter::pruneCheckpointedFields()
 {
-    // Check if checkpointed fields exist in OpenFOAM database
-    // If not, remove them from the checkpointed fields list
+    // Check if checkpointed fields exist in OpenFOAM registry
+    // If not, remove them from the checkpointed fields vector
 
     word obj;
-    std::vector<word> fieldNames;
-    std::vector<std::string> toRemove;
+    bool found = false;
+    std::vector<word> regFields;
+    std::vector<word> toRemove;
+
 #undef doLocalCode
-#define doLocalCode(GeomField, GeomFieldMap, GeomFieldCopiesMap)                                       \
-    fieldNames.clear();                                                                                \
-    toRemove.clear();                                                                                  \
-    for (const word& obj : mesh_.sortedNames<GeomField>())                                             \
-    {                                                                                                  \
-        fieldNames.push_back(obj);                                                                     \
-    }                                                                                                  \
-    for (const auto& kv : GeomFieldMap)                                                                \
-    {                                                                                                  \
-        obj = kv.first;                                                                                \
-        if (std::find(fieldNames.begin(), fieldNames.end(), obj) == fieldNames.end())                  \
-        {                                                                                              \
-            toRemove.push_back(static_cast<std::string>(obj));                                         \
-        }                                                                                              \
-    }                                                                                                  \
-    for (const auto& obj : toRemove)                                                                   \
-    {                                                                                                  \
-        GeomFieldMap.erase(obj);                                                                       \
-        delete GeomFieldCopiesMap[obj];                                                                \
-        GeomFieldCopiesMap.erase(obj);                                                                 \
-        DEBUG(adapterInfo("Removed " #GeomField " : " + obj + " from the checkpointed fields list.")); \
+#define doLocalCode(GeomField, GeomField_, GeomFieldCopies_)                                                          \
+    regFields.clear();                                                                                                \
+    toRemove.clear();                                                                                                 \
+    /* Iterate through fields in OpenFOAM registry */                                                                 \
+    for (const word& obj : mesh_.sortedNames<GeomField>())                                                            \
+    {                                                                                                                 \
+        regFields.push_back(obj);                                                                                     \
+    }                                                                                                                 \
+    /* Iterate through checkpointed fields */                                                                         \
+    for (uint i = 0; i < GeomFieldCopies_.size(); i++)                                                                \
+    {                                                                                                                 \
+        found = false;                                                                                                \
+        obj = GeomFieldCopies_.at(i)->name();                                                                         \
+        for (uint j = 0; j < regFields.size(); j++)                                                                   \
+        {                                                                                                             \
+            if (obj == regFields.at(j))                                                                               \
+            {                                                                                                         \
+                found = true;                                                                                         \
+                break;                                                                                                \
+            }                                                                                                         \
+        }                                                                                                             \
+        if (!found)                                                                                                   \
+        {                                                                                                             \
+            toRemove.push_back(obj);                                                                                  \
+        }                                                                                                             \
+    }                                                                                                                 \
+    if (!toRemove.empty())                                                                                            \
+    {                                                                                                                 \
+        for (int i = toRemove.size() - 1; i >= 0; i--)                                                                \
+        {                                                                                                             \
+            GeomField_.erase(GeomField_.begin() + i);                                                                 \
+            delete GeomFieldCopies_.at(i);                                                                            \
+            GeomFieldCopies_.erase(GeomFieldCopies_.begin() + i);                                                     \
+            DEBUG(adapterInfo("Removed " #GeomField " : " + toRemove.at(i) + " from the checkpointed fields list.")); \
+        }                                                                                                             \
     }
 
     doLocalCode(volScalarField, volScalarFields_, volScalarFieldCopies_);
@@ -1009,96 +1024,96 @@ void preciceAdapter::Adapter::addVolCheckpointField(volScalarField::Internal& fi
 }
 
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, volScalarField* field)
+void preciceAdapter::Adapter::addCheckpointField(volScalarField* field)
 {
     if (field)
     {
-        volScalarFields_[name] = field;
-        volScalarFieldCopies_[name] = new volScalarField(*field);
+        volScalarFields_.push_back(field);
+        volScalarFieldCopies_.push_back(new volScalarField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, volVectorField* field)
+void preciceAdapter::Adapter::addCheckpointField(volVectorField* field)
 {
     if (field)
     {
-        volVectorFields_[name] = field;
-        volVectorFieldCopies_[name] = new volVectorField(*field);
+        volVectorFields_.push_back(field);
+        volVectorFieldCopies_.push_back(new volVectorField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, surfaceScalarField* field)
+void preciceAdapter::Adapter::addCheckpointField(surfaceScalarField* field)
 {
     if (field)
     {
-        surfaceScalarFields_[name] = field;
-        surfaceScalarFieldCopies_[name] = new surfaceScalarField(*field);
+        surfaceScalarFields_.push_back(field);
+        surfaceScalarFieldCopies_.push_back(new surfaceScalarField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, surfaceVectorField* field)
+void preciceAdapter::Adapter::addCheckpointField(surfaceVectorField* field)
 {
     if (field)
     {
-        surfaceVectorFields_[name] = field;
-        surfaceVectorFieldCopies_[name] = new surfaceVectorField(*field);
+        surfaceVectorFields_.push_back(field);
+        surfaceVectorFieldCopies_.push_back(new surfaceVectorField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, pointScalarField* field)
+void preciceAdapter::Adapter::addCheckpointField(pointScalarField* field)
 {
     if (field)
     {
-        pointScalarFields_[name] = field;
-        pointScalarFieldCopies_[name] = new pointScalarField(*field);
+        pointScalarFields_.push_back(field);
+        pointScalarFieldCopies_.push_back(new pointScalarField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, pointVectorField* field)
+void preciceAdapter::Adapter::addCheckpointField(pointVectorField* field)
 {
     if (field)
     {
-        pointVectorFields_[name] = field;
-        pointVectorFieldCopies_[name] = new pointVectorField(*field);
+        pointVectorFields_.push_back(field);
+        pointVectorFieldCopies_.push_back(new pointVectorField(*field));
         // TODO: Old time
         // pointVectorFieldsOld_.push_back(const_cast<pointVectorField&>(field->oldTime())));
         // pointVectorFieldCopiesOld_.push_back(new pointVectorField(field->oldTime()));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, volTensorField* field)
+void preciceAdapter::Adapter::addCheckpointField(volTensorField* field)
 {
     if (field)
     {
-        volTensorFields_[name] = field;
-        volTensorFieldCopies_[name] = new volTensorField(*field);
+        volTensorFields_.push_back(field);
+        volTensorFieldCopies_.push_back(new volTensorField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, surfaceTensorField* field)
+void preciceAdapter::Adapter::addCheckpointField(surfaceTensorField* field)
 {
     if (field)
     {
-        surfaceTensorFields_[name] = field;
-        surfaceTensorFieldCopies_[name] = new surfaceTensorField(*field);
+        surfaceTensorFields_.push_back(field);
+        surfaceTensorFieldCopies_.push_back(new surfaceTensorField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, pointTensorField* field)
+void preciceAdapter::Adapter::addCheckpointField(pointTensorField* field)
 {
     if (field)
     {
-        pointTensorFields_[name] = field;
-        pointTensorFieldCopies_[name] = new pointTensorField(*field);
+        pointTensorFields_.push_back(field);
+        pointTensorFieldCopies_.push_back(new pointTensorField(*field));
     }
 }
 
-void preciceAdapter::Adapter::addCheckpointField(const std::string& name, volSymmTensorField* field)
+void preciceAdapter::Adapter::addCheckpointField(volSymmTensorField* field)
 {
     if (field)
     {
-        volSymmTensorFields_[name] = field;
-        volSymmTensorFieldCopies_[name] = new volSymmTensorField(*field);
+        volSymmTensorFields_.push_back(field);
+        volSymmTensorFieldCopies_.push_back(new volSymmTensorField(*field));
     }
 }
 
@@ -1125,199 +1140,170 @@ void preciceAdapter::Adapter::readCheckpoint()
         reloadMeshPoints();
     }
 
-
-    for (const auto& kv : volScalarFields_)
+    // Reload all the fields of type volScalarField
+    for (uint i = 0; i < volScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volScalarField* field = kv.second;
-        volScalarField* fieldCopy = volScalarFieldCopies_.at(key);
-
         // Load the volume field
-        *field = *fieldCopy;
+        *(volScalarFields_.at(i)) == *(volScalarFieldCopies_.at(i));
         // TODO: Do we need this?
-        // field->boundaryField() = fieldCopy->boundaryField();
+        // *(volScalarFields_.at(i))->boundaryField() = *(volScalarFieldCopies_.at(i))->boundaryField();
 
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(volScalarFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            volScalarFields_.at(i)->oldTime() == volScalarFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            volScalarFields_.at(i)->oldTime().oldTime() == volScalarFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
     // Reload all the fields of type volVectorField
-    for (const auto& kv : volVectorFields_)
+    for (uint i = 0; i < volVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volVectorField* field = kv.second;
-        volVectorField* fieldCopy = volVectorFieldCopies_.at(key);
-
         // Load the volume field
-        *field = *fieldCopy;
+        *(volVectorFields_.at(i)) == *(volVectorFieldCopies_.at(i));
 
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(volVectorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            volVectorFields_.at(i)->oldTime() == volVectorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            volVectorFields_.at(i)->oldTime().oldTime() == volVectorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : surfaceScalarFields_)
+    // Reload all the fields of type surfaceScalarField
+    for (uint i = 0; i < surfaceScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::surfaceScalarField* field = kv.second;
-        Foam::surfaceScalarField* fieldCopy = surfaceScalarFieldCopies_.at(key);
+        *(surfaceScalarFields_.at(i)) == *(surfaceScalarFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(surfaceScalarFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            surfaceScalarFields_.at(i)->oldTime() == surfaceScalarFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            surfaceScalarFields_.at(i)->oldTime().oldTime() == surfaceScalarFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : surfaceVectorFields_)
+    // Reload all the fields of type surfaceVectorField
+    for (uint i = 0; i < surfaceVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::surfaceVectorField* field = kv.second;
-        Foam::surfaceVectorField* fieldCopy = surfaceVectorFieldCopies_.at(key);
+        *(surfaceVectorFields_.at(i)) == *(surfaceVectorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(surfaceVectorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            surfaceVectorFields_.at(i)->oldTime() == surfaceVectorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            surfaceVectorFields_.at(i)->oldTime().oldTime() == surfaceVectorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : pointScalarFields_)
+    // Reload all the fields of type pointScalarField
+    for (uint i = 0; i < pointScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::pointScalarField* field = kv.second;
-        Foam::pointScalarField* fieldCopy = pointScalarFieldCopies_.at(key);
+        *(pointScalarFields_.at(i)) == *(pointScalarFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(pointScalarFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            pointScalarFields_.at(i)->oldTime() == pointScalarFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            pointScalarFields_.at(i)->oldTime().oldTime() == pointScalarFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : pointVectorFields_)
+    // Reload all the fields of type pointVectorField
+    for (uint i = 0; i < pointVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::pointVectorField* field = kv.second;
-        Foam::pointVectorField* fieldCopy = pointVectorFieldCopies_.at(key);
+        // Load the volume field
+        *(pointVectorFields_.at(i)) == *(pointVectorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(pointVectorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            pointVectorFields_.at(i)->oldTime() == pointVectorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            pointVectorFields_.at(i)->oldTime().oldTime() == pointVectorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : volTensorFields_)
+    // TODO Evaluate if all the tensor fields need to be in here.
+    // Reload all the fields of type volTensorField
+    for (uint i = 0; i < volTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::volTensorField* field = kv.second;
-        Foam::volTensorField* fieldCopy = volTensorFieldCopies_.at(key);
+        *(volTensorFields_.at(i)) == *(volTensorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(volTensorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            volTensorFields_.at(i)->oldTime() == volTensorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            volTensorFields_.at(i)->oldTime().oldTime() == volTensorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : surfaceTensorFields_)
+    // Reload all the fields of type surfaceTensorField
+    for (uint i = 0; i < surfaceTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::surfaceTensorField* field = kv.second;
-        Foam::surfaceTensorField* fieldCopy = surfaceTensorFieldCopies_.at(key);
+        *(surfaceTensorFields_.at(i)) == *(surfaceTensorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(surfaceTensorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            surfaceTensorFields_.at(i)->oldTime() == surfaceTensorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            surfaceTensorFields_.at(i)->oldTime().oldTime() == surfaceTensorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : pointTensorFields_)
+    // Reload all the fields of type pointTensorField
+    for (uint i = 0; i < pointTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::pointTensorField* field = kv.second;
-        Foam::pointTensorField* fieldCopy = pointTensorFieldCopies_.at(key);
+        *(pointTensorFields_.at(i)) == *(pointTensorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(pointTensorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            pointTensorFields_.at(i)->oldTime() == pointTensorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            pointTensorFields_.at(i)->oldTime().oldTime() == pointTensorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
-    for (const auto& kv : volSymmTensorFields_)
+    // TODO volSymmTensorField is new.
+    // Reload all the fields of type volSymmTensorField
+    for (uint i = 0; i < volSymmTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        Foam::volSymmTensorField* field = kv.second;
-        Foam::volSymmTensorField* fieldCopy = volSymmTensorFieldCopies_.at(key);
+        *(volSymmTensorFields_.at(i)) == *(volSymmTensorFieldCopies_.at(i));
 
-        *field = *fieldCopy;
-
-        int nOldTimes = field->nOldTimes();
+        int nOldTimes(volSymmTensorFields_.at(i)->nOldTimes());
         if (nOldTimes >= 1)
         {
-            field->oldTime() = fieldCopy->oldTime();
+            volSymmTensorFields_.at(i)->oldTime() == volSymmTensorFieldCopies_.at(i)->oldTime();
         }
         if (nOldTimes == 2)
         {
-            field->oldTime().oldTime() = fieldCopy->oldTime().oldTime();
+            volSymmTensorFields_.at(i)->oldTime().oldTime() == volSymmTensorFieldCopies_.at(i)->oldTime().oldTime();
         }
     }
 
@@ -1349,94 +1335,64 @@ void preciceAdapter::Adapter::writeCheckpoint()
         storeMeshPoints();
     }
 
-    for (const auto& kv : volScalarFields_)
+    // Store all the fields of type volScalarField
+    for (uint i = 0; i < volScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volScalarField* field = kv.second;
-        volScalarField* fieldCopy = volScalarFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(volScalarFieldCopies_.at(i)) == *(volScalarFields_.at(i));
     }
 
-    for (const auto& kv : volVectorFields_)
+    // Store all the fields of type volVectorField
+    for (uint i = 0; i < volVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volVectorField* field = kv.second;
-        volVectorField* fieldCopy = volVectorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(volVectorFieldCopies_.at(i)) == *(volVectorFields_.at(i));
     }
 
-    for (const auto& kv : volTensorFields_)
+    // Store all the fields of type volTensorField
+    for (uint i = 0; i < volTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volTensorField* field = kv.second;
-        volTensorField* fieldCopy = volTensorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(volTensorFieldCopies_.at(i)) == *(volTensorFields_.at(i));
     }
 
-    for (const auto& kv : volSymmTensorFields_)
+    // Store all the fields of type volSymmTensorField
+    for (uint i = 0; i < volSymmTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        volSymmTensorField* field = kv.second;
-        volSymmTensorField* fieldCopy = volSymmTensorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(volSymmTensorFieldCopies_.at(i)) == *(volSymmTensorFields_.at(i));
     }
 
-    for (const auto& kv : surfaceScalarFields_)
+    // Store all the fields of type surfaceScalarField
+    for (uint i = 0; i < surfaceScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        surfaceScalarField* field = kv.second;
-        surfaceScalarField* fieldCopy = surfaceScalarFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(surfaceScalarFieldCopies_.at(i)) == *(surfaceScalarFields_.at(i));
     }
 
-    for (const auto& kv : surfaceVectorFields_)
+    // Store all the fields of type surfaceVectorField
+    for (uint i = 0; i < surfaceVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        surfaceVectorField* field = kv.second;
-        surfaceVectorField* fieldCopy = surfaceVectorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(surfaceVectorFieldCopies_.at(i)) == *(surfaceVectorFields_.at(i));
     }
 
-    for (const auto& kv : surfaceTensorFields_)
+    // Store all the fields of type surfaceTensorField
+    for (uint i = 0; i < surfaceTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        surfaceTensorField* field = kv.second;
-        surfaceTensorField* fieldCopy = surfaceTensorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(surfaceTensorFieldCopies_.at(i)) == *(surfaceTensorFields_.at(i));
     }
 
-    for (const auto& kv : pointScalarFields_)
+    // Store all the fields of type pointScalarField
+    for (uint i = 0; i < pointScalarFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        pointScalarField* field = kv.second;
-        pointScalarField* fieldCopy = pointScalarFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(pointScalarFieldCopies_.at(i)) == *(pointScalarFields_.at(i));
     }
 
-    for (const auto& kv : pointVectorFields_)
+    // Store all the fields of type pointVectorField
+    for (uint i = 0; i < pointVectorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        pointVectorField* field = kv.second;
-        pointVectorField* fieldCopy = pointVectorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(pointVectorFieldCopies_.at(i)) == *(pointVectorFields_.at(i));
     }
 
-    for (const auto& kv : pointTensorFields_)
+    // Store all the fields of type pointTensorField
+    for (uint i = 0; i < pointTensorFields_.size(); i++)
     {
-        const std::string& key = kv.first;
-        pointTensorField* field = kv.second;
-        pointTensorField* fieldCopy = pointTensorFieldCopies_.at(key);
-        *fieldCopy = *field;
-        DEBUG(adapterInfo("Checkpointed " + key));
+        *(pointTensorFieldCopies_.at(i)) == *(pointTensorFields_.at(i));
     }
     // NOTE: Add here other types to write, if needed.
 
@@ -1622,6 +1578,44 @@ void preciceAdapter::Adapter::teardown()
     {
         DEBUG(adapterInfo("Deleting the checkpoints... "));
 
+        // Fields
+        // volScalarFields
+        for (uint i = 0; i < volScalarFieldCopies_.size(); i++)
+        {
+            delete volScalarFieldCopies_.at(i);
+        }
+        volScalarFieldCopies_.clear();
+        // volVector
+        for (uint i = 0; i < volVectorFieldCopies_.size(); i++)
+        {
+            delete volVectorFieldCopies_.at(i);
+        }
+        volVectorFieldCopies_.clear();
+        // surfaceScalar
+        for (uint i = 0; i < surfaceScalarFieldCopies_.size(); i++)
+        {
+            delete surfaceScalarFieldCopies_.at(i);
+        }
+        surfaceScalarFieldCopies_.clear();
+        // surfaceVector
+        for (uint i = 0; i < surfaceVectorFieldCopies_.size(); i++)
+        {
+            delete surfaceVectorFieldCopies_.at(i);
+        }
+        surfaceVectorFieldCopies_.clear();
+        // pointScalar
+        for (uint i = 0; i < pointScalarFieldCopies_.size(); i++)
+        {
+            delete pointScalarFieldCopies_.at(i);
+        }
+        pointScalarFieldCopies_.clear();
+        // pointVector
+        for (uint i = 0; i < pointVectorFieldCopies_.size(); i++)
+        {
+            delete pointVectorFieldCopies_.at(i);
+        }
+        pointVectorFieldCopies_.clear();
+
         // Mesh fields
         // meshSurfaceScalar
         for (uint i = 0; i < meshSurfaceScalarFieldCopies_.size(); i++)
@@ -1652,76 +1646,33 @@ void preciceAdapter::Adapter::teardown()
         }
         volScalarInternalFieldCopies_.clear();
 
-        // volScalarField copies
-        for (auto& kv : volScalarFieldCopies_)
+        // volTensorField
+        for (uint i = 0; i < volTensorFieldCopies_.size(); i++)
         {
-            delete kv.second; // Delete each dynamic field copy
-        }
-        volScalarFieldCopies_.clear();
-
-        // volVectorField copies
-        for (auto& kv : volVectorFieldCopies_)
-        {
-            delete kv.second;
-        }
-        volVectorFieldCopies_.clear();
-
-        // volTensorField copies
-        for (auto& kv : volTensorFieldCopies_)
-        {
-            delete kv.second;
+            delete volTensorFieldCopies_.at(i);
         }
         volTensorFieldCopies_.clear();
 
-        // volSymmTensorField copies
-        for (auto& kv : volSymmTensorFieldCopies_)
+        // surfaceTensorField
+        for (uint i = 0; i < surfaceTensorFieldCopies_.size(); i++)
         {
-            delete kv.second;
-        }
-        volSymmTensorFieldCopies_.clear();
-
-        // surfaceScalarField copies
-        for (auto& kv : surfaceScalarFieldCopies_)
-        {
-            delete kv.second;
-        }
-        surfaceScalarFieldCopies_.clear();
-
-        // surfaceVectorField copies
-        for (auto& kv : surfaceVectorFieldCopies_)
-        {
-            delete kv.second;
-        }
-        surfaceVectorFieldCopies_.clear();
-
-        // surfaceTensorField copies
-        for (auto& kv : surfaceTensorFieldCopies_)
-        {
-            delete kv.second;
+            delete surfaceTensorFieldCopies_.at(i);
         }
         surfaceTensorFieldCopies_.clear();
 
-        // pointScalarField copies
-        for (auto& kv : pointScalarFieldCopies_)
+        // pointTensorField
+        for (uint i = 0; i < pointTensorFieldCopies_.size(); i++)
         {
-            delete kv.second;
-        }
-        pointScalarFieldCopies_.clear();
-
-        // pointVectorField copies
-        for (auto& kv : pointVectorFieldCopies_)
-        {
-            delete kv.second;
-        }
-        pointVectorFieldCopies_.clear();
-
-        // pointTensorField copies
-        for (auto& kv : pointTensorFieldCopies_)
-        {
-            delete kv.second;
+            delete pointTensorFieldCopies_.at(i);
         }
         pointTensorFieldCopies_.clear();
 
+        // volSymmTensor
+        for (uint i = 0; i < volSymmTensorFieldCopies_.size(); i++)
+        {
+            delete volSymmTensorFieldCopies_.at(i);
+        }
+        volSymmTensorFieldCopies_.clear();
 
         // NOTE: Add here delete for other types, if needed
 
