@@ -929,7 +929,7 @@ void preciceAdapter::Adapter::pruneCheckpointedFields()
     // Check if checkpointed fields exist in OpenFOAM registry
     // If not, remove them from the checkpointed fields vector
 
-    word obj;
+    word fieldName;
     std::vector<word> regFields;
     std::vector<word> toRemove;
 
@@ -938,17 +938,17 @@ void preciceAdapter::Adapter::pruneCheckpointedFields()
     regFields.clear();                                                                                                 \
     toRemove.clear();                                                                                                  \
     /* Iterate through fields in OpenFOAM registry */                                                                  \
-    for (const word& obj : mesh_.sortedNames<GeomField>())                                                             \
+    for (const word& fieldName : mesh_.sortedNames<GeomField>())                                                       \
     {                                                                                                                  \
-        regFields.push_back(obj);                                                                                      \
+        regFields.push_back(fieldName);                                                                                \
     }                                                                                                                  \
     /* Iterate through checkpointed fields */                                                                          \
-    for (uint i = 0; i < GeomFieldCopies_.size(); i++)                                                                 \
+    for (GeomField * fieldObj : GeomFieldCopies_)                                                                      \
     {                                                                                                                  \
-        obj = GeomFieldCopies_.at(i)->name();                                                                          \
-        if (std::find(regFields.begin(), regFields.end(), obj) == regFields.end())                                     \
+        fieldName = fieldObj->name();                                                                                  \
+        if (std::find(regFields.begin(), regFields.end(), fieldName) == regFields.end())                               \
         {                                                                                                              \
-            toRemove.push_back(obj);                                                                                   \
+            toRemove.push_back(fieldName);                                                                             \
         }                                                                                                              \
     }                                                                                                                  \
     if (!toRemove.empty())                                                                                             \
