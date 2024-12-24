@@ -958,7 +958,7 @@ void preciceAdapter::Adapter::pruneCheckpointedFields()
     if (!toRemoveIndices.empty())                                                                                                             \
     {                                                                                                                                         \
         /* Iterate in reverse to avoid index shifting */                                                                                      \
-        for (auto it = toRemoveIndices.rbegin(); it < toRemoveIndices.rend(); ++it)                                                           \
+        for (auto it = toRemoveIndices.rbegin(); it != toRemoveIndices.rend(); ++it)                                                          \
         {                                                                                                                                     \
             index = *it;                                                                                                                      \
             DEBUG(adapterInfo("Removed " #GeomFieldType " : " + GeomFieldCopies_.at(index)->name() + " from the checkpointed fields list.")); \
