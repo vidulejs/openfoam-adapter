@@ -24,8 +24,6 @@
 // preCICE Solver Interface
 #include <precice/precice.hpp>
 
-#include <algorithm>
-
 namespace preciceAdapter
 {
 

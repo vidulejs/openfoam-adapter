@@ -3,6 +3,7 @@
 #include "Utilities.H"
 
 #include "IOstreams.H"
+#include <algorithm>
 
 using namespace Foam;
 
@@ -896,12 +897,12 @@ void preciceAdapter::Adapter::setupCheckpointing()
     DEBUG(adapterInfo("Adding in checkpointed fields..."));
 
 #undef doLocalCode
-#define doLocalCode(GeomField)                                           \
-    /* Checkpoint registered GeomField objects */                        \
-    for (const word& obj : mesh_.sortedNames<GeomField>())               \
-    {                                                                    \
-        addCheckpointField(mesh_.thisDb().getObjectPtr<GeomField>(obj)); \
-        DEBUG(adapterInfo("Checkpoint " + obj + " : " #GeomField));      \
+#define doLocalCode(GeomFieldType)                                           \
+    /* Checkpoint registered GeomFieldType objects */                        \
+    for (const word& obj : mesh_.sortedNames<GeomFieldType>())               \
+    {                                                                        \
+        addCheckpointField(mesh_.thisDb().getObjectPtr<GeomFieldType>(obj)); \
+        DEBUG(adapterInfo("Checkpoint " + obj + " : " #GeomFieldType));      \
     }
 
     doLocalCode(volScalarField);
@@ -930,37 +931,41 @@ void preciceAdapter::Adapter::pruneCheckpointedFields()
     // If not, remove them from the checkpointed fields vector
 
     word fieldName;
+    uint index;
     std::vector<word> regFields;
-    std::vector<word> toRemove;
+    std::vector<uint> toRemoveIndices;
 
 #undef doLocalCode
-#define doLocalCode(GeomField, GeomField_, GeomFieldCopies_)                                                           \
-    regFields.clear();                                                                                                 \
-    toRemove.clear();                                                                                                  \
-    /* Iterate through fields in OpenFOAM registry */                                                                  \
-    for (const word& fieldName : mesh_.sortedNames<GeomField>())                                                       \
-    {                                                                                                                  \
-        regFields.push_back(fieldName);                                                                                \
-    }                                                                                                                  \
-    /* Iterate through checkpointed fields */                                                                          \
-    for (GeomField * fieldObj : GeomFieldCopies_)                                                                      \
-    {                                                                                                                  \
-        fieldName = fieldObj->name();                                                                                  \
-        if (std::find(regFields.begin(), regFields.end(), fieldName) == regFields.end())                               \
-        {                                                                                                              \
-            toRemove.push_back(fieldName);                                                                             \
-        }                                                                                                              \
-    }                                                                                                                  \
-    if (!toRemove.empty())                                                                                             \
-    {                                                                                                                  \
-        for (auto it = toRemove.rbegin(); it != toRemove.rend(); ++it)                                                 \
-        {                                                                                                              \
-            auto index = std::distance(toRemove.rbegin(), it);                                                         \
-            GeomField_.erase(GeomField_.begin() + index);                                                              \
-            delete GeomFieldCopies_.at(index);                                                                         \
-            GeomFieldCopies_.erase(GeomFieldCopies_.begin() + index);                                                  \
-            DEBUG(adapterInfo("Removed " #GeomField " : " + toRemove[index] + " from the checkpointed fields list.")); \
-        }                                                                                                              \
+#define doLocalCode(GeomFieldType, GeomField_, GeomFieldCopies_)                                                                              \
+    regFields.clear();                                                                                                                        \
+    toRemoveIndices.clear();                                                                                                                  \
+    index = 0;                                                                                                                                \
+    /* Iterate through fields in OpenFOAM registry */                                                                                         \
+    for (const word& fieldName : mesh_.sortedNames<GeomFieldType>())                                                                          \
+    {                                                                                                                                         \
+        regFields.push_back(fieldName);                                                                                                       \
+    }                                                                                                                                         \
+    /* Iterate through checkpointed fields */                                                                                                 \
+    for (GeomFieldType * fieldObj : GeomFieldCopies_)                                                                                         \
+    {                                                                                                                                         \
+        fieldName = fieldObj->name();                                                                                                         \
+        if (std::find(regFields.begin(), regFields.end(), fieldName) == regFields.end())                                                      \
+        {                                                                                                                                     \
+            toRemoveIndices.push_back(index);                                                                                                 \
+        }                                                                                                                                     \
+        index += 1;                                                                                                                           \
+    }                                                                                                                                         \
+    if (!toRemoveIndices.empty())                                                                                                             \
+    {                                                                                                                                         \
+        /* Iterate in reverse to avoid index shifting */                                                                                      \
+        for (auto it = toRemoveIndices.rbegin(); it < toRemoveIndices.rend(); ++it)                                                           \
+        {                                                                                                                                     \
+            index = *it;                                                                                                                      \
+            DEBUG(adapterInfo("Removed " #GeomFieldType " : " + GeomFieldCopies_.at(index)->name() + " from the checkpointed fields list.")); \
+            GeomField_.erase(GeomField_.begin() + index);                                                                                     \
+            delete GeomFieldCopies_.at(index);                                                                                                \
+            GeomFieldCopies_.erase(GeomFieldCopies_.begin() + index);                                                                         \
+        }                                                                                                                                     \
     }
 
     doLocalCode(volScalarField, volScalarFields_, volScalarFieldCopies_);
