@@ -96,10 +96,13 @@ void preciceAdapter::FSI::Force::read(double* buffer, const unsigned int dim)
         }
     }
 
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_FORCE_READ_MAX_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(maxForceMag)));
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_FORCE_READ_SUM_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(sumForceMag)));
+    // write to file
+    {
+        OFstream os("preciceForceRead.dat", IOstream::ASCII, IOstream::UNCOMPRESSED, IOstream::APPEND);
+        os << mesh_.time().timeName() << " "
+           << sumForceMag << " "
+           << maxForceMag << endl;
+    }
 }
 
 bool preciceAdapter::FSI::Force::isLocationTypeSupported(const bool meshConnectivity) const

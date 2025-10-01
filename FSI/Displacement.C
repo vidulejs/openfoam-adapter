@@ -75,10 +75,13 @@ std::size_t preciceAdapter::FSI::Displacement::write(double* buffer, bool meshCo
         }
     }
 
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_DISPLACEMENT_WRITE_MAX_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(maxDispMag)));
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_DISPLACEMENT_WRITE_SUM_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(sumDispMag)));
+    // write to file
+    {
+        OFstream os("preciceDisplacementWrite.dat", IOstream::ASCII, IOstream::UNCOMPRESSED, IOstream::APPEND);
+        os << mesh_.time().timeName() << " "
+           << sumDispMag << " "
+           << maxDispMag << endl;
+    }
 
     int bufferIndex = 0;
     if (this->locationType_ == LocationType::faceCenters)
@@ -211,10 +214,13 @@ void preciceAdapter::FSI::Displacement::read(double* buffer, const unsigned int 
         }
     }
 
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_DISPLACEMENT_READ_MAX_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(maxDispMag)));
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_DISPLACEMENT_READ_SUM_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(sumDispMag)));
+    //write to file
+    {
+        OFstream os("preciceDisplacementRead.dat", IOstream::ASCII, IOstream::UNCOMPRESSED, IOstream::APPEND);
+        os << mesh_.time().timeName() << " "
+           << sumDispMag << " "
+           << maxDispMag << endl;
+    }
 }
 
 bool preciceAdapter::FSI::Displacement::isLocationTypeSupported(const bool meshConnectivity) const

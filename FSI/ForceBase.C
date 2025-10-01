@@ -196,10 +196,13 @@ std::size_t preciceAdapter::FSI::ForceBase::writeToBuffer(double* buffer,
         }
     }
 
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_FORCE_WRITE_MAX_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(maxForceMag)));
-    DEBUG(adapterInfo(
-        "PRECICE_DEBUG_FORCE_WRITE_SUM_MAG TIME=" + std::to_string(mesh_.time().value()) + " VALUE=" + std::to_string(sumForceMag)));
+    // write to file
+    {
+        OFstream os("preciceForceWrite.dat", IOstream::ASCII, IOstream::UNCOMPRESSED, IOstream::APPEND);
+        os << mesh_.time().timeName() << " "
+           << sumForceMag << " "
+           << maxForceMag << endl;
+    }
 
     return bufferIndex;
 }
