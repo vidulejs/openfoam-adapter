@@ -141,6 +141,12 @@ private:
     //- Checkpointed time (index)
     Foam::label couplingIterationTimeIndex_;
 
+    // Counter for the coupling iterations (1, 2, 3...)
+    unsigned int currentCouplingIteration_;
+
+    // Counter for the sub-steps within a window (0, 1, 2...)
+    unsigned int currentSubstepIndex_;
+
     //- Checkpointed mesh points
     Foam::pointField meshPoints_;
     Foam::pointField oldMeshPoints_;

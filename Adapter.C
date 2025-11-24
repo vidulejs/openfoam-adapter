@@ -345,6 +345,10 @@ try
     // Initialize preCICE and exchange the first coupling data
     initialize();
 
+    // Initialize debug counters
+    currentCouplingIteration_ = 1;
+    currentSubstepIndex_ = 0;
+
     // If checkpointing is required, specify the checkpointed fields
     // and write the first checkpoint
     if (requiresWritingCheckpoint())
@@ -411,6 +415,10 @@ try
     {
         pruneCheckpointedFields();
         readCheckpoint();
+
+        // DEBUG: We are restarting the window. Increment iteration, reset sub-step.
+        currentCouplingIteration_++;
+        currentSubstepIndex_ = 0;
     }
 
     // Write checkpoint if required
@@ -437,6 +445,10 @@ try
                 "info");
             const_cast<Time&>(runTime_).writeNow();
         }
+
+        // DEBUG: Window finished. Reset counters for the next time window.
+        currentCouplingIteration_ = 1;
+        currentSubstepIndex_ = 0;
     }
     ACCUMULATE_TIMER(timeInWriteResults_);
 
@@ -495,10 +507,23 @@ void preciceAdapter::Adapter::readCouplingData(double relativeReadTime)
     SETUP_TIMER();
     DEBUG(adapterInfo("Reading coupling data..."));
 
+    // DEBUG LOGIC:
+    // Iteration 1: Standard Read (likely garbage/zeros).
+    // Iteration 2: Standard Read (Good data) -> COMMAND INTERFACE TO CACHE THIS.
+    // Iteration 3+: NO READ. COMMAND INTERFACE TO USE CACHE.
+
+    bool saveToCache = (currentCouplingIteration_ == 2);
+    bool useCachedData = (currentCouplingIteration_ > 2);
+
     for (uint i = 0; i < interfaces_.size(); i++)
     {
-        interfaces_.at(i)->readCouplingData(relativeReadTime);
+        // NOTE: You must update Interface::readCouplingData to accept these args
+        // Pass the currentSubstepIndex_ so the interface knows which slot to save/load
+        interfaces_.at(i)->readCouplingData(relativeReadTime, saveToCache, useCachedData, currentSubstepIndex_);
     }
+
+    // Increment sub-step index for the next call within this window
+    currentSubstepIndex_++;
 
     ACCUMULATE_TIMER(timeInRead_);
 

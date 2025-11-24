@@ -530,7 +530,11 @@ void preciceAdapter::Interface::createBuffer()
     dataBuffer_.resize(dataBufferSize);
 }
 
-void preciceAdapter::Interface::readCouplingData(double relativeReadTime)
+void preciceAdapter::Interface::readCouplingData(
+    double relativeReadTime,
+    bool saveToCache,
+    bool useCachedData,
+    unsigned int substepIndex)
 {
     // Make every coupling data reader read
     for (uint i = 0; i < couplingDataReaders_.size(); i++)
@@ -539,20 +543,90 @@ void preciceAdapter::Interface::readCouplingData(double relativeReadTime)
         preciceAdapter::CouplingDataUser*
             couplingDataReader = couplingDataReaders_.at(i);
 
-        // Make preCICE read vector or scalar data
-        // and fill the adapter's buffer
-        std::size_t nReadData = vertexIDs_.size() * precice_.getDataDimensions(meshName_, couplingDataReader->dataName());
-        // We could add a sanity check here
-        // nReadData == vertexIDs_.size() * (1 + (dim_ - 1) * static_cast<int>(couplingDataReader->hasVectorData()));
+        std::string dataName = couplingDataReader->dataName();
 
-        precice_.readData(
-            meshName_,
-            couplingDataReader->dataName(),
-            vertexIDs_,
-            relativeReadTime,
-            {dataBuffer_.data(), nReadData});
+        // Calculate how much data we expect (scalar vs vector)
+        std::size_t nReadData = vertexIDs_.size() * precice_.getDataDimensions(meshName_, dataName);
 
-        // Read the received data from the buffer
+        // --- LOGIC BRANCH: REPLAY vs RECORD vs STANDARD ---
+
+        if (useCachedData)
+        {
+            // MODE: REPLAY
+            // Do NOT call precice_.readData(). Use local cache.
+
+            bool cacheHit = false;
+            // Check if we have data for this field
+            if (subcyclingDataCache_.find(dataName) != subcyclingDataCache_.end())
+            {
+                const auto& steps = subcyclingDataCache_[dataName];
+                // Check if we have data for this specific substep
+                if (substepIndex < steps.size())
+                {
+                    const auto& cachedValues = steps[substepIndex];
+
+                    // Safety check on size
+                    if (cachedValues.size() >= nReadData)
+                    {
+                        // Copy cached data into the active buffer
+                        // We use std::copy to overwrite the dataBuffer_
+                        std::copy(cachedValues.begin(), cachedValues.begin() + nReadData, dataBuffer_.begin());
+                        cacheHit = true;
+
+                        DEBUG(adapterInfo("DEBUG: Replaying cached data for " + dataName + " substep " + std::to_string(substepIndex)));
+                    }
+                    else
+                    {
+                        adapterInfo("DEBUG: Cache size mismatch for " + dataName + ". Expected " + std::to_string(nReadData) + ", got " + std::to_string(cachedValues.size()), "error");
+                    }
+                }
+                else
+                {
+                    adapterInfo("DEBUG: Cache index out of bounds for " + dataName + ". Substep " + std::to_string(substepIndex), "error");
+                }
+            }
+
+            if (!cacheHit)
+            {
+                adapterInfo("DEBUG: Critical: No cache found for " + dataName + " during replay phase!", "error");
+            }
+        }
+        else
+        {
+            // MODE: STANDARD READ (Interact with preCICE)
+
+            precice_.readData(
+                meshName_,
+                dataName,
+                vertexIDs_,
+                relativeReadTime,
+                {dataBuffer_.data(), nReadData});
+
+            // MODE: RECORD (Save what we just read)
+            if (saveToCache)
+            {
+                // 1. Ensure map entry exists
+                if (subcyclingDataCache_.find(dataName) == subcyclingDataCache_.end())
+                {
+                    subcyclingDataCache_[dataName] = std::vector<std::vector<double>>();
+                }
+
+                // 2. If this is the start of a window (substep 0), clear old history
+                if (substepIndex == 0)
+                {
+                    subcyclingDataCache_[dataName].clear();
+                }
+
+                // 3. Copy the current buffer state to the cache
+                // We only store the relevant slice of the buffer
+                std::vector<double> snapshot(dataBuffer_.begin(), dataBuffer_.begin() + nReadData);
+                subcyclingDataCache_[dataName].push_back(snapshot);
+
+                DEBUG(adapterInfo("DEBUG: Recording data for " + dataName + " substep " + std::to_string(substepIndex)));
+            }
+        }
+
+        // Finally, apply the data (from buffer or cache) to the OpenFOAM fields
         couplingDataReader->read(dataBuffer_.data(), dim_);
     }
 }

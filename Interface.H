@@ -66,6 +66,9 @@ protected:
                        const std::string& namePointDisplacement,
                        const std::string& nameCellDisplacement);
 
+    // Maps "DataName" -> [SubstepIndex] -> [DataValues]
+    std::map<std::string, std::vector<std::vector<double>>> subcyclingDataCache_;
+
 public:
     //- Constructor
     Interface(
@@ -98,7 +101,12 @@ public:
 
     //- Call read() on each registered couplingDataReader to read the coupling
     //  data from the buffer and apply the boundary conditions
-    void readCouplingData(double relativeReadTime);
+    // Update the declaration:
+    void readCouplingData(
+        double relativeReadTime,
+        bool saveToCache = false,
+        bool useCachedData = false,
+        unsigned int substepIndex = 0);
 
     //- Call write() on each registered couplingDataWriter to extract the boundary
     //  data and write them into the buffer
