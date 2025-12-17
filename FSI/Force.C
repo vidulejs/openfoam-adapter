@@ -36,9 +36,70 @@ preciceAdapter::FSI::Force::Force(
     }
 }
 
+// Helper implementation
+void preciceAdapter::FSI::Force::resetAccumulator(size_t nData)
+{
+    accForce_.assign(nData, 0.0);
+    accTime_ = 0.0;
+}
+
 std::size_t preciceAdapter::FSI::Force::write(double* buffer, bool meshConnectivity, const unsigned int dim)
 {
-    return this->writeToBuffer(buffer, *Force_, dim);
+    std::size_t nData = this->writeToBuffer(buffer, *Force_, dim);
+
+    double currentTime = mesh_.time().value();
+    double dt = mesh_.time().deltaTValue();
+
+    // Init buffer if first run
+    if (accForce_.size() != nData)
+    {
+        resetAccumulator(nData);
+        lastWriteTime_ = currentTime;
+
+        // Init history vectors
+        prevStepForce_.assign(nData, 0.0);
+        startWindowForce_.assign(nData, 0.0);
+    }
+    // 1. Implicit: Time moved backwards
+    if (currentTime < lastWriteTime_ - 1e-9)
+    {
+        // Reset sums
+        resetAccumulator(nData);
+
+        prevStepForce_ = startWindowForce_;
+    }
+    // 2. New Window
+    else if (accTime_ >= WINDOW_SIZE - 1e-9)
+    {
+        startWindowForce_ = prevStepForce_;
+
+        resetAccumulator(nData);
+    }
+
+    // Trapezoidal integration
+    // Impulse = 1/2 * (F_prev + F_curr) * dt
+    for (std::size_t i = 0; i < nData; ++i)
+    {
+        accForce_[i] += 0.5 * (prevStepForce_[i] + buffer[i]) * dt;
+
+        // Update history for next step
+        prevStepForce_[i] = buffer[i];
+    }
+    accTime_ += dt;
+
+    // OVERWRITE OUTPUT BUFFER WITH AVERAGE
+    // F_avg = Sum(Impulse) / Sum(dt)
+    if (accTime_ > 1e-12)
+    {
+        for (std::size_t i = 0; i < nData; ++i)
+        {
+            buffer[i] = accForce_[i] / accTime_;
+        }
+    }
+
+    lastWriteTime_ = currentTime;
+
+    return nData;
 }
 
 void preciceAdapter::FSI::Force::read(double* buffer, const unsigned int dim)

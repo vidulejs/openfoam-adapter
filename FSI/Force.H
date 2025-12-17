@@ -18,6 +18,17 @@ private:
     //- Force field (owning pointer, we bind to Force_)
     std::unique_ptr<Foam::volVectorField> ForceOwning_;
 
+    std::vector<double> accForce_; // Sum of Force * dt
+    double accTime_ = 0.0;         // Sum of dt
+    double lastWriteTime_ = -1.0;
+
+    void resetAccumulator(size_t nData);
+    // HARDCODED Window Size
+    // this needs to be read programmatically from another class
+    const double WINDOW_SIZE = 0.01;
+    std::vector<double> prevStepForce_;    // prev substep force
+    std::vector<double> startWindowForce_; // Force at Window Start
+
 public:
     //- Constructor
     Force(
