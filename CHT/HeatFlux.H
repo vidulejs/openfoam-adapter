@@ -27,6 +27,17 @@ protected:
     //- Wrapper for the getAt() method of the corresponding KappaEff class
     virtual Foam::scalar getKappaEffAt(int i) = 0;
 
+    std::vector<double> accHeatFlux_; // Sum of HeatFlux * dt
+    double accTime_ = 0.0;            // Sum of dt
+    double lastWriteTime_ = -1.0;
+
+    void resetAccumulator(size_t nData);
+    // HARDCODED Window Size
+    // this needs to be read programmatically from another class
+    const double WINDOW_SIZE = 0.05;
+    std::vector<double> prevStepHeatFlux_;    // prev substep HeatFlux
+    std::vector<double> startWindowHeatFlux_; // HeatFlux at Window Start
+
 public:
     //- Constructor
     HeatFlux(const Foam::fvMesh& mesh, const std::string nameT);

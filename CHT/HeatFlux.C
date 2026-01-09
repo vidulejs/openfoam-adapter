@@ -18,6 +18,13 @@ preciceAdapter::CHT::HeatFlux::HeatFlux(
     dataType_ = scalar;
 }
 
+// Helper implementation
+void preciceAdapter::CHT::HeatFlux::resetAccumulator(size_t nData)
+{
+    accHeatFlux_.assign(nData, 0.0);
+    accTime_ = 0.0;
+}
+
 std::size_t preciceAdapter::CHT::HeatFlux::write(double* buffer, bool meshConnectivity, const unsigned int dim)
 {
     int bufferIndex = 0;
@@ -68,7 +75,61 @@ std::size_t preciceAdapter::CHT::HeatFlux::write(double* buffer, bool meshConnec
             }
         }
     }
-    return bufferIndex;
+
+    std::size_t nData = bufferIndex;
+    double currentTime = mesh_.time().value();
+    double dt = mesh_.time().deltaTValue();
+
+    // Init buffer if first run
+    if (accHeatFlux_.size() != nData)
+    {
+        resetAccumulator(nData);
+        lastWriteTime_ = currentTime;
+
+        // Init history vectors
+        prevStepHeatFlux_.assign(nData, 0.0);
+        startWindowHeatFlux_.assign(nData, 0.0);
+    }
+    // 1. Implicit: Time moved backwards
+    if (currentTime < lastWriteTime_ - 1e-9)
+    {
+        // Reset sums
+        resetAccumulator(nData);
+
+        prevStepHeatFlux_ = startWindowHeatFlux_;
+    }
+    // 2. New Window
+    else if (accTime_ >= WINDOW_SIZE - 1e-9)
+    {
+        startWindowHeatFlux_ = prevStepHeatFlux_;
+
+        resetAccumulator(nData);
+    }
+
+    // Trapezoidal integration
+    // Impulse = 1/2 * (F_prev + F_curr) * dt
+    for (std::size_t i = 0; i < nData; ++i)
+    {
+        accHeatFlux_[i] += 0.5 * (prevStepHeatFlux_[i] + buffer[i]) * dt;
+
+        // Update history for next step
+        prevStepHeatFlux_[i] = buffer[i];
+    }
+    accTime_ += dt;
+
+    // OVERWRITE OUTPUT BUFFER WITH AVERAGE
+    // F_avg = Sum(Impulse) / Sum(dt)
+    if (accTime_ > 1e-12)
+    {
+        for (std::size_t i = 0; i < nData; ++i)
+        {
+            buffer[i] = accHeatFlux_[i] / accTime_;
+        }
+    }
+
+    lastWriteTime_ = currentTime;
+
+    return nData;
 }
 
 void preciceAdapter::CHT::HeatFlux::read(double* buffer, const unsigned int dim)
